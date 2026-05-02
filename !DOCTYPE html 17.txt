@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>健康射擊對戰：英雄重現版</title>
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    /* 背景改為稍微深藍，增加與角色的對比 */
+    background-image: radial-gradient(circle, #0d1b2a, #000);
+    color: white;
+    font-family: '微軟正黑體', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  /* 頂部 UI */
+  #ui {
+    position: absolute;
+    top: 20px;
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    z-index: 100;
+  }
+
+  .bar-wrapper { width: 35%; text-align: center; }
+  .name-tag { font-size: 24px; font-weight: bold; margin-bottom: 5px; color: #ffcc00; text-shadow: 2px 2px 4px #000; }
+  .bar { height: 28px; background: #222; border: 3px solid #fff; border-radius: 8px; overflow: hidden; }
+  .hp { height: 100%; width: 100%; transition: width 0.4s ease-out; }
+  #heroHP { background: linear-gradient(to right, #00ff88, #008855); }
+  #monsterHP { background: linear-gradient(to right, #ff4444, #880000); }
+
+  /* 戰鬥區 */
+  #arena {
+    position: relative;
+    width: 100vw;
+    height: calc(100vh - 250px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10%;
+    box-sizing: border-box;
+  }
+
+  .character {
+    width: 350px; 
+    height: 350px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    position: relative;
+    /* --- 強化去背效果 --- */
+    mix-blend-mode: plus-lighter; /* 過濾較暗/背景色，保留亮色 */
+    image-rendering: pixelated; 
+    filter: contrast(1.1) brightness(1.1);
+  }
+
+  /* 英雄角色 (確保圖片連結有效) */
+  #hero {
+    background-image: url('https://thumb.ac-illust.com/97/978809277636e2f6966e60b29c9197c2_t.jpeg');
+  }
+
+  /* 怪物角色 */
+  #monster {
+    background-image: url('https://tse3.mm.bing.net/th/id/OIP.R5uPXbtUlHtld8HpvLZjoQHaIA?pid=Api&P=0&h=180');
+    transform: scaleX(-1); 
+  }
+
+  /* 受擊特效：改用紅光閃爍，避免去背濾鏡干擾 */
+  .hit { animation: flashRed 0.2s; }
+  @keyframes flashRed {
+    0% { filter: brightness(5) sepia(1) hue-rotate(-50deg); }
+    100% { filter: none; }
+  }
+
+  /* 子彈 */
+  .bullet {
+    width: 40px;
+    height: 12px;
+    background: #ffcc00;
+    position: absolute;
+    border-radius: 6px;
+    box-shadow: 0 0 15px #ffcc00;
+    z-index: 50;
+  }
+
+  /* 題目區 */
+  #questionContainer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 250px;
+    background: rgba(10, 10, 30, 0.98);
+    border-top: 4px solid #ffcc00;
+    padding: 20px;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  #question { font-size: 26px; margin-bottom: 20px; color: #fff; font-weight: bold; }
+  .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 850px; margin: 0 auto; }
+  
+  button {
+    padding: 12px;
+    font-size: 20px;
+    cursor: pointer;
+    background: #1a1a3a;
+    color: white;
+    border: 2px solid #555;
+    border-radius: 10px;
+    transition: 0.2s;
+  }
+
+  button:hover:not(:disabled) { background: #ffcc00; color: #000; border-color: #fff; }
+  button:disabled { opacity: 0.3; }
+
+  #startNotice {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    background: #000; display:flex; flex-direction:column;
+    justify-content:center; align-items:center; z-index:999;
+  }
+</style>
+</head>
+<body>
+
+<div id="startNotice">
+  <h1 style="font-size: 40px; color: #ffcc00;">健康防衛戰</h1>
+  <p>英雄廖謚誠，準備好挑戰了嗎？</p>
+  <button onclick="startGame()" style="padding: 15px 50px; font-size: 24px; background: #ffcc00; color: #000; font-weight:bold; border-radius:30px;">開始遊戲</button>
+</div>
+
+<!-- 音樂 -->
+<audio id="bgm" src="https://cdn.pixabay.com/audio/2024/04/12/audio_104f76231c.mp3" loop></audio>
+<audio id="shootSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_49b1d9.mp3"></audio>
+<audio id="hitSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_c6ccf4.mp3"></audio>
+
+<div id="ui">
+  <div class="bar-wrapper">
+    <div class="name-tag">英雄</div>
+    <div class="bar"><div id="heroHP" class="hp"></div></div>
+  </div>
+  <div class="bar-wrapper">
+    <div class="name-tag">怪物</div>
+    <div class="bar"><div id="monsterHP" class="hp"></div></div>
+  </div>
+</div>
+
+<div id="arena">
+  <div id="hero" class="character"></div>
+  <div id="monster" class="character"></div>
+</div>
+
+<div id="questionContainer">
+  <div id="question">等待戰鬥開始...</div>
+  <div id="choices" class="btn-group"></div>
+</div>
+
+<script>
+let hHP = 100, mHP = 100;
+
+// 使用你提供的 30 題不重複題目
+const questions = [
+  {q:"睡眠不足最直接影響什麼？",a:["記憶力下降","視力變好","身高增加","免疫提升"],c:0},
+  {q:"成人建議睡眠時間？",a:["3-4小時","5-6小時","7-9小時","12小時以上"],c:2},
+  {q:"有氧運動例子？",a:["跑步","舉重","冥走","睡覺"],c:0},
+  {q:"無氧運動例子？",a:["短跑","慢跑","游泳","散步"],c:0},
+  {q:"心跳正常範圍？",a:["20-40","60-100","120-140","150-180"],c:1},
+  {q:"血壓過高稱為？",a:["低血壓","高血壓","貧血","糖尿病"],c:1},
+  {q:"維生素C主要功能？",a:["抗氧化","增加脂肪","降低水分","升高血壓"],c:0},
+  {q:"鈣主要作用？",a:["骨骼","消化","呼吸","視力"],c:0},
+  {q:"鐵不足會？",a:["貧血","肥胖","高血壓","失明"],c:0},
+  {q:"蛋白質主要功能？",a:["修復組織","供糖","供脂肪","供鹽"],c:0},
+  {q:"水分不足會？",a:["脫水","變高","變胖","變強"],c:0},
+  {q:"每日建議喝水？",a:["500ml","1000ml","2000ml","4000ml"],c:2},
+  {q:"高鹽飲食會導致？",a:["高血壓","低血壓","近視","骨折"],c:0},
+  {q:"高糖飲食會？",a:["蛀牙","變健康","長高","增肌"],c:0},
+  {q:"肥胖風險？",a:["心臟病","視力提升","骨頭變強","免疫上升"],c:0},
+  {q:"吸菸主要傷害？",a:["肺","骨","皮膚","胃"],c:0},
+  {q:"運動頻率建議？",a:["每週5天","每月1天","不運動","一年一次"],c:0},
+  {q:"久坐影響？",a:["代謝下降","變高","變瘦","變聰明"],c:0},
+  {q:"水果主要提供？",a:["維生素","脂肪","鹽","咖啡因"],c:0},
+  {q:"蔬菜主要作用？",a:["纖維","糖","油","酒精"],c:0},
+  {q:"睡前滑手機影響？",a:["失眠","變健康","長高","強壯"],c:0},
+  {q:"壓力過大會？",a:["焦慮","變強","變高","變瘦"],c:0},
+  {q:"心理健康包含？",a:["情緒穩定","只睡覺","不吃飯","不喝水"],c:0},
+  {q:"洗手重要時機？",a:["吃飯前","只早上","只晚上","不需要"],c:0},
+  {q:"運動前需要？",a:["熱身","喝酒","抽菸","熬夜"],c:0},
+  {q:"肌肉來源？",a:["蛋白質","糖","鹽","水"],c:0},
+  {q:"骨骼健康需要？",a:["鈣","糖","油","咖啡"],c:0},
+  {q:"缺乏運動會？",a:["肥胖","長高","變聰明","視力提升"],c:0},
+  {q:"喝酒過量會傷？",a:["肝臟","眼睛","耳朵","骨頭"],c:0},
+  {q:"熬夜影響？",a:["免疫下降","變健康","長高","變強"],c:0}
+];
+
+let activeQuestions = [...questions];
+
+function startGame() {
+  document.getElementById("startNotice").style.display = "none";
+  document.getElementById("bgm").play();
+  nextRound();
+}
+
+function nextRound() {
+  if (activeQuestions.length === 0) {
+    alert("恭喜破關！");
+    location.reload();
+    return;
+  }
+  const index = Math.floor(Math.random() * activeQuestions.length);
+  const qData = activeQuestions.splice(index, 1)[0];
+  let opts = qData.a.map((t, i) => ({ text: t, ok: i === qData.c }));
+  opts.sort(() => Math.random() - 0.5);
+
+  document.getElementById("question").innerText = qData.q;
+  const div = document.getElementById("choices");
+  div.innerHTML = "";
+  opts.forEach(o => {
+    const b = document.createElement("button");
+    b.innerText = o.text;
+    b.onclick = () => {
+      div.querySelectorAll("button").forEach(btn => btn.disabled = true);
+      handle(o.ok);
+    };
+    div.appendChild(b);
+  });
+}
+
+function handle(ok) {
+  shoot(ok);
+  setTimeout(nextRound, 1500);
+}
+
+function shoot(isHero) {
+  document.getElementById("shootSound").play();
+  const b = document.createElement("div");
+  b.className = "bullet";
+  document.body.appendChild(b);
+
+  let startX = isHero ? 320 : window.innerWidth - 320;
+  let startY = window.innerHeight / 2 - 30;
+  b.style.left = startX + "px";
+  b.style.top = startY + "px";
+
+  let x = startX;
+  const move = setInterval(() => {
+    x += isHero ? 35 : -35;
+    b.style.left = x + "px";
+    if (x > window.innerWidth - 320 || x < 320) {
+      clearInterval(move);
+      b.remove();
+      document.getElementById("hitSound").play();
+      const target = isHero ? document.getElementById("monster") : document.getElementById("hero");
+      target.classList.add("hit");
+      setTimeout(() => target.classList.remove("hit"), 200);
+      if (isHero) mHP -= 20; else hHP -= 20;
+      update();
+    }
+  }, 20);
+}
+
+function update() {
+  document.getElementById("heroHP").style.width = hHP + "%";
+  document.getElementById("monsterHP").style.width = mHP + "%";
+  if (hHP <= 0) { alert("英雄戰敗！"); location.reload(); }
+  if (mHP <= 0) { mHP = 100; update(); }
+}
+</script>
+
+</body>
+</html>
